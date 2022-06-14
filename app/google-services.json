@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "330858725022",
+    "project_id": "instabase-a630e",
+    "storage_bucket": "instabase-a630e.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:330858725022:android:ddfbb5a56824e038dec58f",
+        "android_client_info": {
+          "package_name": "com.example.instabase"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "330858725022-enjguffl7rdkoe1uc8836o00c1tl8ou1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOfzr4yzWjyQpylDZMD0WvIIQGXPXpDXk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "330858725022-enjguffl7rdkoe1uc8836o00c1tl8ou1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
