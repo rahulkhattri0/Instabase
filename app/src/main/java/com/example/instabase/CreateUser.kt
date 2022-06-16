@@ -1,55 +1,202 @@
 package com.example.instabase
 
+import android.Manifest
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import com.example.instabase.utils.BitmapScaler
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.ktx.storage
+import java.io.ByteArrayOutputStream
+import kotlin.math.log
 
 class CreateUser : AppCompatActivity() {
 private lateinit var email:TextView
 private lateinit var password:TextView
 private lateinit var submit: Button
-companion object{
-    private const val TAG = "CreateActivity"
-}
+private lateinit var profilephoto:ImageView
+private lateinit var name:TextView
+private val gallerypicIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI).setType("image/*")
+private lateinit var byteArray:ByteArray
+private val storage = Firebase.storage
+    private val database = Firebase.firestore
+
+    //using contracts to request for permissions,this is the newer way as startActivityForResult() is deprecated.
+    private var  permissions : ActivityResultLauncher<Array<String>> = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()){
+        it.entries.forEach {
+                permission ->
+            val granted = permission.value
+            val nameofpermission = permission.key
+            if(granted){
+                if(nameofpermission== Manifest.permission.READ_EXTERNAL_STORAGE){
+                    Toast.makeText(this,"permission for storage granted", Toast.LENGTH_LONG).show()
+                }
+                opengallery.launch(gallerypicIntent)
+            }
+            else{
+                if(nameofpermission== Manifest.permission.READ_EXTERNAL_STORAGE){
+                    Toast.makeText(this,"permission for storage denied", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+    private var opengallery: ActivityResultLauncher<Intent> =registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK && result.data != null) {
+            val data = result.data?.data
+            byteArray = convertImageToByteArray(data!!)
+            profilephoto.setImageURI(data!!)
+        }
+    }
+
+    private fun uploadProfilePhotoToFirestore(bytearray: ByteArray) {
+
+    }
+
+    companion object{
+        private const val TAG = "CreateUser"
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_create_user)
         email=findViewById(R.id.create_email)
         password=findViewById(R.id.create_password)
         submit=findViewById(R.id.create_submit)
+        profilephoto=findViewById(R.id.profile_photo)
+        name = findViewById(R.id.create_name)
         val auth = FirebaseAuth.getInstance()
         submit.setOnClickListener {
             if (email.text.isBlank() || password.text.isBlank()){
                 Toast.makeText(this,"Email and passwords cannot be empty", Toast.LENGTH_LONG).show()
             }
+            //checking if email is valid or not.
+            else if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.text).matches()){
+                Toast.makeText(this,"Invalid Email", Toast.LENGTH_LONG).show()
+            }
+                else if(password.text.toString().length < 6) {
+                Toast.makeText(this, "Password is too short", Toast.LENGTH_LONG).show()
+            }
+            //creation of user
             else{
-                auth.createUserWithEmailAndPassword(email.text.toString(),password.text.toString()).addOnCompleteListener{
-                    createUserTask ->
-                    if(createUserTask.isSuccessful){
-                        Log.i(TAG,"User created")
-                        Toast.makeText(this,"User created hurray!",Toast.LENGTH_LONG).show()
-                    }
-                    else{
-                        try{
-                            throw createUserTask.exception!!
-                        }
-                        catch (Exception: FirebaseAuthUserCollisionException){
-                            Log.i(TAG,"email taken exception $Exception")
-                            Toast.makeText(this,"Email Taken!",Toast.LENGTH_LONG).show()
-                        }
-                        catch (Exception:FirebaseAuthException){
-                            Log.i(TAG,"$Exception")
-                        }
-                    }
-
-                }
+                userCreationFlow(auth)
             }
         }
+        profilephoto.setOnClickListener {
+        requeststoragepermissions()
+        }
+    }
+    private fun userCreationFlow(auth: FirebaseAuth) {
+        submit.isEnabled = false
+    auth.createUserWithEmailAndPassword(email.text.toString(), password.text.toString()).addOnCompleteListener { UserCreationtask ->
+        if (UserCreationtask.isSuccessful) {
+            val uid:String = UserCreationtask.result.user!!.uid
+            Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG).show()
+            entrytoFirebaseDatabase(uid)
+        } else {
+            submit.isEnabled=true
+            try {
+                throw UserCreationtask.getException()!!
+            } catch (e: FirebaseAuthUserCollisionException) {
+                Toast.makeText(this, "Email Taken", Toast.LENGTH_LONG).show()
+                Log.i(TAG, "email taken")
+            } catch (e: FirebaseAuthException) {
+                Toast.makeText(
+                    this,
+                    "Some error occured and could not create user",
+                    Toast.LENGTH_LONG
+                ).show()
+                Log.i(TAG, "$e")
+            }
+        }
+    }
+}
+
+    private fun entrytoFirebaseDatabase(uid:String) {
+        val filepath = "profile_photos/${name.text.toString()}.jpg"
+        val photoreference = storage.reference.child(filepath)
+        if(byteArray==null){
+            //TODO:will do this later.
+        }
+        else{
+            photoreference.putBytes(byteArray).continueWithTask {
+            Log.i(TAG,"Bytes uploaded: ${it.result.bytesTransferred}")
+            photoreference.downloadUrl
+        }.addOnCompleteListener {
+            submit.isEnabled= true
+            if (it.isSuccessful){
+                database.collection("users").document(uid).set(mapOf("username" to name.text.toString(),"profile photo" to it.result.toString())).addOnCompleteListener {
+                    uploadtodatabase ->
+                    if(uploadtodatabase.isSuccessful)
+                        Toast.makeText(this,"user created in database",Toast.LENGTH_LONG).show()
+                    else
+                        Log.i(TAG,"some error occurred ${uploadtodatabase.exception}")
+                }
+//                Toast.makeText(this,"Profile photo uploaded",Toast.LENGTH_LONG).show()
+            }
+            else{
+                Toast.makeText(this,"Could not upload profile photo some error occurred and user could not be created. ${it.exception}",Toast.LENGTH_LONG).show()
+            }
+        }
+        }
+
+    }
+
+
+    fun convertImageToByteArray(picuri: Uri):ByteArray{
+        val originalbitmap = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ){
+            val source = ImageDecoder.createSource(contentResolver,picuri)
+            ImageDecoder.decodeBitmap(source)
+        }
+        else{
+            MediaStore.Images.Media.getBitmap(contentResolver,picuri)
+        }
+        Log.i(TAG,"original bitmap width ${originalbitmap.width} height ${originalbitmap.height} ")
+        val scaledBitmap = BitmapScaler.scale_To_fit_height(originalbitmap,250)
+        Log.i(TAG,"Scaled bitmap bitmap width ${scaledBitmap.width} height ${scaledBitmap.height} ")
+        //down scaling the images is necessary because we only have a limited amount of free storage available in firebase
+        val byteOutputStream = ByteArrayOutputStream()
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG,60,byteOutputStream)
+        return byteOutputStream.toByteArray()
+    }
+    //this method first checks the android version of the target device(Marshmello and up is required) then checks if the rationale describing the
+    //permission should be shown or not(using shouldShowRequestPermissionRationale(
+    //                Manifest.permission.READ_EXTERNAL_STORAGE
+    //            ).then in the else condition it launches the contract that handles permissions.
+    // in android 11 if a permission is denied two times we have to enable the permission from the app settings and therefore if a permission is denied
+    // twice, when we launch our permission contract it will always show permission denied.
+    private fun requeststoragepermissions() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && shouldShowRequestPermissionRationale(
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            )
+        ) {
+            showRationale("Storage permission required", "Click on the 'OK' below to grant storage access ")
+        } else {
+            permissions.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
+        }
+    }
+
+    private fun showRationale(title: String, message: String) {
+    AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK"){
+        _,_ ->
+        permissions.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
+    }
     }
 }
