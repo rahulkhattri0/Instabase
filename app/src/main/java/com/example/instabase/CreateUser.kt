@@ -10,10 +10,8 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
-import android.widget.Button
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.Toast
+import android.view.View
+import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -36,8 +34,8 @@ private lateinit var name:TextView
 private val gallerypicIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI).setType("image/*")
 private lateinit var byteArray:ByteArray
 private val storage = Firebase.storage
-    private val database = Firebase.firestore
-
+private val database = Firebase.firestore
+private lateinit var progress:ProgressBar
     //using contracts to request for permissions,this is the newer way as startActivityForResult() is deprecated.
     private var  permissions : ActivityResultLauncher<Array<String>> = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()){
@@ -81,6 +79,7 @@ private val storage = Firebase.storage
         submit=findViewById(R.id.create_submit)
         profilephoto=findViewById(R.id.profile_photo)
         name = findViewById(R.id.create_name)
+        progress =findViewById(R.id.progress_bar)
         val auth = FirebaseAuth.getInstance()
         submit.setOnClickListener {
             if (email.text.isBlank() || password.text.isBlank()){
@@ -93,7 +92,6 @@ private val storage = Firebase.storage
                 else if(password.text.toString().length < 6) {
                 Toast.makeText(this, "Password is too short", Toast.LENGTH_LONG).show()
             }
-            //creation of user
             else{
                 userCreationFlow(auth)
             }
@@ -102,58 +100,83 @@ private val storage = Firebase.storage
         requeststoragepermissions()
         }
     }
+
+
     private fun userCreationFlow(auth: FirebaseAuth) {
+        progress.visibility = View.VISIBLE
         submit.isEnabled = false
-    auth.createUserWithEmailAndPassword(email.text.toString(), password.text.toString()).addOnCompleteListener { UserCreationtask ->
-        if (UserCreationtask.isSuccessful) {
-            val uid:String = UserCreationtask.result.user!!.uid
-            Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG).show()
-            entrytoFirebaseDatabase(uid)
-        } else {
-            submit.isEnabled=true
-            try {
-                throw UserCreationtask.getException()!!
-            } catch (e: FirebaseAuthUserCollisionException) {
-                Toast.makeText(this, "Email Taken", Toast.LENGTH_LONG).show()
-                Log.i(TAG, "email taken")
-            } catch (e: FirebaseAuthException) {
-                Toast.makeText(
-                    this,
-                    "Some error occured and could not create user",
-                    Toast.LENGTH_LONG
-                ).show()
-                Log.i(TAG, "$e")
+        database.collection("users").document(name.text.toString()).get().addOnSuccessListener{
+            document ->
+            if(document.data==null){
+                createUser(auth)
+
             }
+            else{
+                Toast.makeText(this,"user with this name exists",Toast.LENGTH_LONG).show()
+                submit.isEnabled=true
+                progress.visibility = View.GONE
+            }
+        }.addOnFailureListener {
+            Log.i(TAG,"some error:$it")
         }
-    }
 }
+
+    private fun createUser(auth: FirebaseAuth) {
+        auth.createUserWithEmailAndPassword(email.text.toString(), password.text.toString())
+            .addOnCompleteListener { UserCreationtask ->
+                if (UserCreationtask.isSuccessful) {
+                    val uid: String = UserCreationtask.result.user!!.uid
+                    Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG)
+                        .show()
+                    entrytoFirebaseDatabase(uid)
+                } else {
+                    submit.isEnabled = true
+                    try {
+                        throw UserCreationtask.getException()!!
+                    } catch (e: FirebaseAuthUserCollisionException) {
+                        Toast.makeText(this, "Email Taken", Toast.LENGTH_LONG).show()
+                        Log.i(TAG, "email taken")
+                        submit.isEnabled = true
+                        progress.visibility = View.GONE
+                    } catch (e: FirebaseAuthException) {
+                        Toast.makeText(
+                            this,
+                            "Some error occured and could not create user",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        Log.i(TAG, "$e")
+                    }
+                }
+            }
+    }
 
     private fun entrytoFirebaseDatabase(uid:String) {
         val filepath = "profile_photos/${name.text.toString()}.jpg"
         val photoreference = storage.reference.child(filepath)
         if(byteArray==null){
-            //TODO:will do this later.
+            //TODO:will do this later
         }
         else{
             photoreference.putBytes(byteArray).continueWithTask {
             Log.i(TAG,"Bytes uploaded: ${it.result.bytesTransferred}")
+                progress.progress = (it.result.bytesTransferred / it.result.totalByteCount).toInt()
             photoreference.downloadUrl
         }.addOnCompleteListener {
-            submit.isEnabled= true
             if (it.isSuccessful){
-                database.collection("users").document(uid).set(mapOf("username" to name.text.toString(),"profile photo" to it.result.toString())).addOnCompleteListener {
+                database.collection("users").document(name.text.toString()).set(mapOf("username" to name.text.toString(),"profile photo" to it.result.toString(),"UID" to uid)).addOnCompleteListener {
                     uploadtodatabase ->
                     if(uploadtodatabase.isSuccessful)
-                        Toast.makeText(this,"user created in database",Toast.LENGTH_LONG).show()
+                        Toast.makeText(this,"user details stored in database",Toast.LENGTH_LONG).show()
                     else
                         Log.i(TAG,"some error occurred ${uploadtodatabase.exception}")
                 }
-//                Toast.makeText(this,"Profile photo uploaded",Toast.LENGTH_LONG).show()
             }
             else{
                 Toast.makeText(this,"Could not upload profile photo some error occurred and user could not be created. ${it.exception}",Toast.LENGTH_LONG).show()
             }
         }
+            submit.isEnabled= true
+            progress.visibility = View.GONE
         }
 
     }
