@@ -63,11 +63,6 @@ private lateinit var progress:ProgressBar
             profilephoto.setImageURI(data!!)
         }
     }
-
-    private fun uploadProfilePhotoToFirestore(bytearray: ByteArray) {
-
-    }
-
     companion object{
         private const val TAG = "CreateUser"
     }
@@ -101,7 +96,7 @@ private lateinit var progress:ProgressBar
         }
     }
 
-
+//checks if username exists in the database,if not then creates the user.
     private fun userCreationFlow(auth: FirebaseAuth) {
         progress.visibility = View.VISIBLE
         submit.isEnabled = false
@@ -109,7 +104,6 @@ private lateinit var progress:ProgressBar
             document ->
             if(document.data==null){
                 createUser(auth)
-
             }
             else{
                 Toast.makeText(this,"user with this name exists",Toast.LENGTH_LONG).show()
@@ -129,7 +123,9 @@ private lateinit var progress:ProgressBar
                     Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG)
                         .show()
                     entrytoFirebaseDatabase(uid)
-                } else {
+                }
+                //error checking in the user creation process.
+                else {
                     submit.isEnabled = true
                     try {
                         throw UserCreationtask.getException()!!
@@ -139,17 +135,12 @@ private lateinit var progress:ProgressBar
                         submit.isEnabled = true
                         progress.visibility = View.GONE
                     } catch (e: FirebaseAuthException) {
-                        Toast.makeText(
-                            this,
-                            "Some error occured and could not create user",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(this, "Some error occured and could not create user", Toast.LENGTH_LONG).show()
                         Log.i(TAG, "$e")
                     }
                 }
             }
     }
-
     private fun entrytoFirebaseDatabase(uid:String) {
         val filepath = "profile_photos/${name.text.toString()}.jpg"
         val photoreference = storage.reference.child(filepath)
@@ -157,31 +148,25 @@ private lateinit var progress:ProgressBar
             //TODO:will do this later
         }
         else{
-            photoreference.putBytes(byteArray).continueWithTask {
-            Log.i(TAG,"Bytes uploaded: ${it.result.bytesTransferred}")
+            photoreference.putBytes(byteArray)
+                .continueWithTask {
+                Log.i(TAG,"Bytes uploaded: ${it.result.bytesTransferred}")
                 progress.progress = (it.result.bytesTransferred / it.result.totalByteCount).toInt()
-            photoreference.downloadUrl
-        }.addOnCompleteListener {
-            if (it.isSuccessful){
-                database.collection("users").document(name.text.toString()).set(mapOf("username" to name.text.toString(),"profile photo" to it.result.toString(),"UID" to uid)).addOnCompleteListener {
-                    uploadtodatabase ->
-                    if(uploadtodatabase.isSuccessful)
-                        Toast.makeText(this,"user details stored in database",Toast.LENGTH_LONG).show()
-                    else
-                        Log.i(TAG,"some error occurred ${uploadtodatabase.exception}")
-                }
+                photoreference.downloadUrl
+        }.continueWithTask { downloadURLTask ->
+                database.collection("users").document(name.text.toString()).set(mapOf("username" to name.text.toString(),"profile photo" to downloadURLTask.result.toString(),"UID" to uid))
+        }.addOnCompleteListener{ userDataStoreTask ->
+            if(userDataStoreTask.isSuccessful){
+                Toast.makeText(this,"user data stored in database!",Toast.LENGTH_LONG).show()
             }
-            else{
-                Toast.makeText(this,"Could not upload profile photo some error occurred and user could not be created. ${it.exception}",Toast.LENGTH_LONG).show()
+            else
+                Log.i(TAG,"some error occurred while storing user data : ${userDataStoreTask.exception}")
             }
-        }
             submit.isEnabled= true
             progress.visibility = View.GONE
         }
 
     }
-
-
     fun convertImageToByteArray(picuri: Uri):ByteArray{
         val originalbitmap = if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ){
             val source = ImageDecoder.createSource(contentResolver,picuri)
@@ -199,9 +184,8 @@ private lateinit var progress:ProgressBar
         return byteOutputStream.toByteArray()
     }
     //this method first checks the android version of the target device(Marshmello and up is required) then checks if the rationale describing the
-    //permission should be shown or not(using shouldShowRequestPermissionRationale(
-    //                Manifest.permission.READ_EXTERNAL_STORAGE
-    //            ).then in the else condition it launches the contract that handles permissions.
+    //permission should be shown or not(using shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE).then
+    // in the else condition it launches the contract that handles permissions.
     // in android 11 if a permission is denied two times we have to enable the permission from the app settings and therefore if a permission is denied
     // twice, when we launch our permission contract it will always show permission denied.
     private fun requeststoragepermissions() {
