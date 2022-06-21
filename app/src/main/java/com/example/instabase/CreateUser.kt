@@ -120,9 +120,8 @@ private lateinit var progress:ProgressBar
             .addOnCompleteListener { UserCreationtask ->
                 if (UserCreationtask.isSuccessful) {
                     val uid: String = UserCreationtask.result.user!!.uid
-                    Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG)
-                        .show()
-                    entrytoFirebaseDatabase(uid)
+                    Toast.makeText(this, "user created with email:${email.text}", Toast.LENGTH_LONG).show()
+                    entrytoFirebaseDatabase(uid,auth)
                 }
                 //error checking in the user creation process.
                 else {
@@ -141,7 +140,7 @@ private lateinit var progress:ProgressBar
                 }
             }
     }
-    private fun entrytoFirebaseDatabase(uid:String) {
+    private fun entrytoFirebaseDatabase(uid:String,auth:FirebaseAuth) {
         val filepath = "profile_photos/${name.text.toString()}.jpg"
         val photoreference = storage.reference.child(filepath)
         if(byteArray==null){
@@ -155,15 +154,26 @@ private lateinit var progress:ProgressBar
                 photoreference.downloadUrl
         }.continueWithTask { downloadURLTask ->
                 database.collection("users").document(name.text.toString()).set(mapOf("username" to name.text.toString(),"profile photo" to downloadURLTask.result.toString(),"UID" to uid))
-        }.addOnCompleteListener{ userDataStoreTask ->
-            if(userDataStoreTask.isSuccessful){
-                Toast.makeText(this,"user data stored in database!",Toast.LENGTH_LONG).show()
+        }.continueWithTask{ _ ->
+                    auth.signInWithEmailAndPassword(email.text.toString(),password.text.toString())
+                }.addOnCompleteListener{ CompleteUserTask ->
+            if(CompleteUserTask.isSuccessful){
+                submit.isEnabled= true
+                progress.visibility = View.GONE
+                Toast.makeText(this,"New user with email: ${email.text} signed in!",Toast.LENGTH_LONG).show()
+                val intent = Intent(this,PostsActivity().javaClass )
+                startActivity(intent)
+                finish()
+
             }
-            else
-                Log.i(TAG,"some error occurred while storing user data : ${userDataStoreTask.exception}")
+            else{
+                Toast.makeText(this,"some error occured.",Toast.LENGTH_LONG).show()
+                Log.i(TAG,"some error occurred while storing user data : ${CompleteUserTask.exception}")
+                submit.isEnabled= true
+                progress.visibility = View.GONE
+
             }
-            submit.isEnabled= true
-            progress.visibility = View.GONE
+            }
         }
 
     }
