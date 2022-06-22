@@ -3,9 +3,11 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
-        <entry key="..\:/Instabase/app/src/main/res/layout/activity_create_user.xml" value="0.25416666666666665" />
-        <entry key="..\:/Instabase/app/src/main/res/layout/activity_login.xml" value="0.264" />
+        <entry key="..\:/Instabase/app/src/main/res/layout/activity_create_user.xml" value="0.2" />
+        <entry key="..\:/Instabase/app/src/main/res/layout/activity_login.xml" value="0.2" />
         <entry key="..\:/Instabase/app/src/main/res/layout/activity_posts.xml" value="0.19427083333333334" />
+        <entry key="..\:/Instabase/app/src/main/res/layout/activity_upload_photo.xml" value="0.18802083333333333" />
+        <entry key="..\:/Instabase/app/src/main/res/layout/testing.xml" value="0.18958333333333333" />
       </map>
     </option>
   </component>

@@ -15,6 +15,7 @@ import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import com.example.instabase.models.User
 import com.example.instabase.utils.BitmapScaler
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
@@ -141,6 +142,7 @@ private lateinit var progress:ProgressBar
             }
     }
     private fun entrytoFirebaseDatabase(uid:String,auth:FirebaseAuth) {
+        var user:User? = null
         val filepath = "profile_photos/${name.text.toString()}.jpg"
         val photoreference = storage.reference.child(filepath)
         if(byteArray==null){
@@ -153,7 +155,8 @@ private lateinit var progress:ProgressBar
                 progress.progress = (it.result.bytesTransferred / it.result.totalByteCount).toInt()
                 photoreference.downloadUrl
         }.continueWithTask { downloadURLTask ->
-                database.collection("users").document(name.text.toString()).set(mapOf("username" to name.text.toString(),"profile photo" to downloadURLTask.result.toString(),"UID" to uid))
+                    user = User(name.text.toString(),downloadURLTask.result.toString(),uid)
+                database.collection("users").document(name.text.toString()).set(user!!)
         }.continueWithTask{ _ ->
                     auth.signInWithEmailAndPassword(email.text.toString(),password.text.toString())
                 }.addOnCompleteListener{ CompleteUserTask ->

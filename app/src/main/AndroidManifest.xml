@@ -13,6 +13,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Instabase">
         <activity
+            android:name=".UploadPhoto"
+            android:exported="true" />
+        <activity
             android:name=".PostsActivity"
             android:exported="true" />
         <activity
